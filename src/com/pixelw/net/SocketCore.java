@@ -39,6 +39,8 @@ public class SocketCore {
 
     //开启一个新线程 从serversocket.accept -> socket -> readline -> 关闭
 
+    
+
     public void waitNewClient() {
         new Thread(new Runnable() {
             @Override
