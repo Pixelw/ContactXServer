@@ -1,7 +1,6 @@
 package com.pixelw;
 
 import com.pixelw.net.SocketCore;
-
 import java.util.Scanner;
 
 public class Main {
@@ -16,15 +15,19 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
         running = true;
         while (running) {
-            parseCommand(scanner.next());
+            parseCommand(scanner.nextLine());
         }
+
         System.out.println("Exit");
     }
 
     private static void parseCommand(String command) {
         switch (command) {
             case "stop":
-//                socketCore.closeConnection();
+                socketCore.closeConnection();
+                break;
+            case "bye":
+            case "exit":
                 running = false;
                 break;
             default:
@@ -38,7 +41,8 @@ public class Main {
     private static boolean parseArgsCommand(String command) {
         if (command.startsWith("say ")) {
             String arg = command.substring(4);
-//            socketCore.sendViaSocket(arg);
+            String[] args = arg.split(" ",2);
+            socketCore.sendTextMsg(args[0],args[1]);
             return true;
         }
         return false;

@@ -1,20 +1,37 @@
 package com.pixelw.net;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.pixelw.beans.IMMessage;
+
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class SocketCore {
 
     private int serverPort = 9832;
     private static final String CLOSE_TOKEN = "JBdKZ7g7sub8bP3";
     private ServerSocket serverSocket;
+    private ExecutorService threadPool;
+    private Gson gson;
+
+    Map<String, Socket> socketMap = new HashMap<>();
+
 
     public SocketCore() {
         try {
+            threadPool = Executors.newCachedThreadPool();
             InetAddress mHost = InetAddress.getLocalHost();
+             gson = new GsonBuilder()
+                    .setDateFormat("yyyy-MM-dd H:mm:ss")
+                    .create();
             String hostname = mHost.getHostName();
             String hostIP = mHost.getHostAddress();
             System.out.println("ContactXServer init.\nPowered by Pixelw.");
@@ -22,7 +39,7 @@ public class SocketCore {
             System.out.println("IP: " + hostIP);
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println("Init failed..");
+            System.out.println("Error: Init failed..");
         }
     }
 
@@ -32,33 +49,30 @@ public class SocketCore {
             serverSocket = new ServerSocket(serverPort);
             waitNewClient();
         } catch (IOException e) {
-            System.out.println("error binding port" + serverPort);
+            System.out.println("Error: error binding port" + serverPort);
             e.printStackTrace();
         }
     }
 
     //开启一个新线程 从serversocket.accept -> socket -> readline -> 关闭
 
-    
-
     public void waitNewClient() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    System.out.println("Port: " + serverPort);
-                    //阻塞 直到有socket连接
-                    Socket socket = serverSocket.accept();
-                    //递归 新线程等待下一个客户端
-                    waitNewClient();
-                    System.out.println(socket.getInetAddress() + " connected");
-                    listenClient(socket);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
+        threadPool.execute(() -> {
+            try {
+                System.out.println("Port: " + serverPort);
+                //阻塞 直到有socket连接
+                Socket socket = serverSocket.accept();
+                //存入<IP,socket> map
+                socketMap.put(socket.getInetAddress().toString(), socket);
+                //递归 新线程等待下一个客户端
+                waitNewClient();
+                System.out.println(socket.getInetAddress() + " connected");
+                listenClient(socket);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        }).start();
+
+        });
     }
 
     private void listenClient(Socket socket) {
@@ -80,8 +94,24 @@ public class SocketCore {
         }
     }
 
-    //TODO 关闭所有连接
     public void closeConnection() {
+        //foreach 或者Iterator
+        try {
+            if (socketMap.size() > 0){
+                for (String strAddress : socketMap.keySet()) {
+                    Socket socket = socketMap.get(strAddress);
+                    sendViaSocket(socket,CLOSE_TOKEN);
+                    socket.close();
+                }
+            }else{
+                System.out.println("no opened sockets");
+            }
+
+            serverSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("error on stop");
+        }
 
     }
 
@@ -89,22 +119,34 @@ public class SocketCore {
         if (msg.equals(CLOSE_TOKEN)) {
             return false;
         } else {
-            System.out.println(source + " says: " + msg);
+            IMMessage imMessage = gson.fromJson(msg, IMMessage.class);
+            imMessage.setMsgSource(source);
+            System.out.println(imMessage.getMsgUser() + ": " + imMessage.getMsgBody());
             return true;
         }
 
     }
 
 
-    //todo 给选的客户端发消息
-    public void sendViaSocket(String msg, Socket socket) {
+    public void sendTextMsg(String msg, String ipAddress) {
+        Socket socket;
+        if (socketMap.containsKey(ipAddress)) {
+            socket = socketMap.get(ipAddress);
+            sendViaSocket(socket, msg);
+        } else {
+            System.out.println("Error: client " + ipAddress + " not found.");
+        }
+
+    }
+
+    private void sendViaSocket(Socket socket, String msg) {
         try {
-            if (socket.isConnected()) {
+            if (!socket.isClosed()) {
                 OutputStream outputStream = socket.getOutputStream();
-                outputStream.write(msg.getBytes(StandardCharsets.UTF_8));
+                outputStream.write((msg + "\n").getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
             } else {
-                System.out.println("no client yet.");
+                System.out.println("Error: socket not ready");
             }
         } catch (IOException e) {
             e.printStackTrace();
