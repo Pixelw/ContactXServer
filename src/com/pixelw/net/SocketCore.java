@@ -1,7 +1,5 @@
 package com.pixelw.net;
 
-import com.pixelw.dao.ClientsHandler;
-
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -13,18 +11,19 @@ import java.util.concurrent.Executors;
 
 public class SocketCore {
 
-    private int serverPort = 9832;
+    private int serverPort;
     private static final String CLOSE_TOKEN = "JBdKZ7g7sub8bP3";
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
-    private ClientsHandler clientsHandler;
+    private SocketListener socketListener;
 
 
-    public SocketCore() {
+    public SocketCore(SocketListener socketListener, int serverPort) {
+        this.socketListener = socketListener;
+        this.serverPort = serverPort;
         try {
             threadPool = Executors.newCachedThreadPool();
             InetAddress mHost = InetAddress.getLocalHost();
-            clientsHandler = new ClientsHandler(this);
             String hostname = mHost.getHostName();
             String hostIP = mHost.getHostAddress();
             System.out.println("ContactXServer init.\nPowered by Pixelw.");
@@ -52,16 +51,16 @@ public class SocketCore {
     public void waitNewClient() {
         threadPool.execute(() -> {
             try {
-                System.out.println("Port: " + serverPort);
                 //阻塞 直到有socket连接
                 Socket socket = serverSocket.accept();
-                //存入<IP,socket> map
-                clientsHandler.newClient(socket.getInetAddress().toString(), socket);
-                //递归 新线程等待下一个客户端
-                waitNewClient();
-                System.out.println(socket.getInetAddress() + " connected");
-                listenClient(socket);
+                if (socket != null) {
+                    //递归 新线程等待下一个客户端
+                    waitNewClient();
+                    socketListener.onOpen(this, socket);
+                    listenClient(socket);
+                }
             } catch (IOException e) {
+                System.out.println("error on wait");
                 e.printStackTrace();
             }
         });
@@ -77,65 +76,70 @@ public class SocketCore {
                 BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
                 //阻塞 直到客户端发送"\n"
                 receivedMsg = bufferedReader.readLine();
-            } while (receiveTextMsg(receivedMsg, socket.getInetAddress().toString()));
+            } while (receive(receivedMsg, socket));
             socket.close();
-            System.out.println(socket.getInetAddress().toString() + " disconnected");
+            socketListener.onDisconnected(this, socket);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void closeConnection() {
+    /**
+     * 处理接收消息
+     * 当消息为CLOSE_TOKEN的内容时，返回false结束loop
+     *
+     * @param msg    收到的消息
+     * @param socket 对应的连接socket
+     * @return 是否保持连接
+     */
+    private boolean receive(String msg, Socket socket) {
+        if (msg.equals(CLOSE_TOKEN)) {
+            socketListener.onDisconnecting(this, socket);
+            return false;
+        }
+        socketListener.onMessage(this, socket, msg);
+//        clientsHandler.handleClientMessage(msg, socket);
+        return true;
+
+    }
+
+    public void closeConnection(Map<String, Socket> map) {
         //foreach 或者Iterator
-        Map<String,Socket> map = clientsHandler.getSocket_IP_Map();
         try {
             if (map.size() > 0) {
-                for (String strAddress : map.keySet()) {
-                    Socket socket = map.get(strAddress);
+                for (String strUserID : map.keySet()) {
+                    Socket socket = map.get(strUserID);
                     sendViaSocket(socket, CLOSE_TOKEN);
                     socket.close();
                 }
             } else {
                 System.out.println("no opened sockets");
             }
-
             serverSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
             System.out.println("error on stop");
+        } finally {
+            threadPool.shutdown();
         }
 
     }
 
-    private boolean receiveTextMsg(String msg, String source) {
-        if (msg.equals(CLOSE_TOKEN)) {
-            return false;
-        }
-        clientsHandler.handleClientMessage(msg, source);
-        return true;
 
+    public void sendTextMsg(String msg, Socket socketTargetUser) {
+        if (socketTargetUser != null) {
+            sendViaSocket(socketTargetUser, msg);
+        }
     }
 
-
-    public void sendTextMsg(String msg, String ipAddress) {
-        Socket socket;
-        if (ipAddress != null && clientsHandler.getSocket_IP_Map().containsKey(ipAddress)) {
-            socket = clientsHandler.getSocket_IP_Map().get(ipAddress);
-            sendViaSocket(socket, msg);
-        } else {
-            System.out.println("Error: client " + ipAddress + " not found.");
-        }
-
-    }
-
-    private void sendViaSocket(Socket socket, String msg) {
+    public void sendViaSocket(Socket socket, String msg) {
         try {
             if (!socket.isClosed()) {
                 OutputStream outputStream = socket.getOutputStream();
                 outputStream.write((msg + "\n").getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
             } else {
-                System.out.println("Error: socket not ready");
+                System.out.println("Error: client" + socket.getInetAddress() + "disconnected");
             }
         } catch (IOException e) {
             e.printStackTrace();

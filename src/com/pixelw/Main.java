@@ -7,12 +7,10 @@ import java.util.Scanner;
 public class Main {
 
     private static boolean running;
-
-    private static SocketCore socketCore;
+    private static IMController imController;
 
     public static void main(String[] args) {
-        socketCore = new SocketCore();
-        socketCore.bindPort();
+        imController = new IMController();
         Scanner scanner = new Scanner(System.in);
         running = true;
         while (running) {
@@ -25,10 +23,9 @@ public class Main {
     private static void parseCommand(String command) {
         switch (command) {
             case "stop":
-                socketCore.closeConnection();
-                break;
             case "bye":
             case "exit":
+                imController.finish();
                 running = false;
                 break;
             default:
@@ -43,7 +40,7 @@ public class Main {
         if (command.startsWith("say ")) {
             String arg = command.substring(4);
             String[] args = arg.split(" ",2);
-            socketCore.sendTextMsg(args[0],args[1]);
+            imController.sendTextMsg(args[0],args[1]);
             return true;
         }
         return false;
