@@ -1,4 +1,7 @@
-package com.pixelw.net;
+package com.pixelw.net.legacy;
+
+import com.pixelw.entity.Client;
+import com.pixelw.net.ServerListener;
 
 import java.io.*;
 import java.net.InetAddress;
@@ -6,23 +9,15 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-public class SocketCore {
+public class SocketCore extends com.pixelw.net.ServerCore {
 
-    private int serverPort;
-    private static final String CLOSE_TOKEN = "JBdKZ7g7sub8bP3";
     private ServerSocket serverSocket;
-    private ExecutorService threadPool;
-    private SocketListener socketListener;
 
 
-    public SocketCore(SocketListener socketListener, int serverPort) {
-        this.socketListener = socketListener;
-        this.serverPort = serverPort;
+    public SocketCore(ServerListener serverListener, int serverPort) {
+        super(serverListener, serverPort);
         try {
-            threadPool = Executors.newCachedThreadPool();
             InetAddress mHost = InetAddress.getLocalHost();
             String hostname = mHost.getHostName();
             String hostIP = mHost.getHostAddress();
@@ -35,13 +30,46 @@ public class SocketCore {
         }
     }
 
+    @Override
+    public void sendTextMsg(String msg, Client client) {
+        Socket socketTargetUser = client.getSocket();
+        if (socketTargetUser != null) {
+            sendViaSocket(socketTargetUser, msg);
+        }
+    }
 
-    public void bindPort() {
+    @Override
+    public void shutdown(Map<String, Client> map) {
+        //foreach 或者Iterator
         try {
-            serverSocket = new ServerSocket(serverPort);
+            if (map.size() > 0) {
+                for (String strUserID : map.keySet()) {
+                    Client client = map.get(strUserID);
+                    Socket socket = client.getSocket();
+                    sendViaSocket(socket, CONTROL_TOKEN);
+                    socket.close();
+                }
+            } else {
+                System.out.println("no opened sockets");
+            }
+            serverSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("error on stop");
+        } finally {
+            threadPool.shutdown();
+            listener.onClosed(this);
+        }
+
+    }
+
+
+    public void run() {
+        try {
+            serverSocket = new ServerSocket(port);
             waitNewClient();
         } catch (IOException e) {
-            System.out.println("Error: error binding port" + serverPort);
+            System.out.println("Error: error binding port" + port);
             e.printStackTrace();
         }
     }
@@ -56,8 +84,9 @@ public class SocketCore {
                 if (socket != null) {
                     //递归 新线程等待下一个客户端
                     waitNewClient();
-                    socketListener.onOpen(this, socket);
-                    listenClient(socket);
+                    Client client = new Client(socket);
+                    listener.onOpen(this, client);
+                    listenClient(client);
                 }
             } catch (IOException e) {
                 System.out.println("error on wait");
@@ -66,19 +95,19 @@ public class SocketCore {
         });
     }
 
-    private void listenClient(Socket socket) {
+    private void listenClient(Client client) {
         String receivedMsg;
         try {
             InputStream inputStream;
             do {
-                inputStream = socket.getInputStream();
+                inputStream = client.getSocket().getInputStream();
                 InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
                 BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
                 //阻塞 直到客户端发送"\n"
                 receivedMsg = bufferedReader.readLine();
-            } while (receive(receivedMsg, socket));
-            socket.close();
-            socketListener.onDisconnected(this, socket);
+            } while (receive(receivedMsg, client));
+            client.getSocket().close();
+            listener.onDisconnected(this, client);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -89,50 +118,22 @@ public class SocketCore {
      * 当消息为CLOSE_TOKEN的内容时，返回false结束loop
      *
      * @param msg    收到的消息
-     * @param socket 对应的连接socket
+     * @param client 对应的连接客户端
      * @return 是否保持连接
      */
-    private boolean receive(String msg, Socket socket) {
-        if (msg.equals(CLOSE_TOKEN)) {
-            socketListener.onDisconnecting(this, socket);
+    private boolean receive(String msg, Client client) {
+
+        if (msg != null && msg.equals(CONTROL_TOKEN)) {
+            listener.onDisconnecting(this, client);
             return false;
         }
-        socketListener.onMessage(this, socket, msg);
+        listener.onMessage(this, client, msg);
 //        clientsHandler.handleClientMessage(msg, socket);
         return true;
 
     }
 
-    public void closeConnection(Map<String, Socket> map) {
-        //foreach 或者Iterator
-        try {
-            if (map.size() > 0) {
-                for (String strUserID : map.keySet()) {
-                    Socket socket = map.get(strUserID);
-                    sendViaSocket(socket, CLOSE_TOKEN);
-                    socket.close();
-                }
-            } else {
-                System.out.println("no opened sockets");
-            }
-            serverSocket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.out.println("error on stop");
-        } finally {
-            threadPool.shutdown();
-        }
-
-    }
-
-
-    public void sendTextMsg(String msg, Socket socketTargetUser) {
-        if (socketTargetUser != null) {
-            sendViaSocket(socketTargetUser, msg);
-        }
-    }
-
-    public void sendViaSocket(Socket socket, String msg) {
+    private void sendViaSocket(Socket socket, String msg) {
         try {
             if (!socket.isClosed()) {
                 OutputStream outputStream = socket.getOutputStream();

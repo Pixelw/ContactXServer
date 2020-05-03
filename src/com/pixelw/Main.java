@@ -1,7 +1,5 @@
 package com.pixelw;
 
-import com.pixelw.net.SocketCore;
-
 import java.util.Scanner;
 
 public class Main {

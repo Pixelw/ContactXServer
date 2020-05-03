@@ -1,4 +1,4 @@
-package com.pixelw.beans;
+package com.pixelw.entity;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;

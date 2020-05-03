@@ -8,7 +8,6 @@ public class UserID {
 
     List<String> idList = new ArrayList<>();
 
-
     public static String getRandom(int length) {
         Random random = new Random();
         StringBuilder numbers = new StringBuilder();

@@ -2,9 +2,9 @@ package com.pixelw;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.pixelw.beans.IMMessage;
+import com.pixelw.entity.Client;
+import com.pixelw.entity.IMMessage;
 
-import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -12,14 +12,15 @@ public class ClientsHandler {
 
     //todo 12/17 生成分发客户端ID
 
-    private Map<String, Socket> userID_Socket_map = new HashMap<>();
+    private static final String CONTROL_TOKEN = "JBdKZ7g7sub8bP3";
+    private Map<String, Client> stringClientMap = new HashMap<>();
 
     private ClientsHandler.Callback callback;
 
     private Gson gson;
 
-    public Map<String, Socket> getUserID_Socket_map() {
-        return userID_Socket_map;
+    public Map<String, Client> getStringClientMap() {
+        return stringClientMap;
     }
 
 
@@ -30,28 +31,27 @@ public class ClientsHandler {
 
     }
 
-
-    public void newClient(String userID, Socket socket) {
-        userID_Socket_map.put(userID, socket);
+    public void newClient(String userID, Client client) {
+        stringClientMap.put(userID, client);
     }
 
-    public void setCallback(Callback callback){
+    public void setCallback(Callback callback) {
         this.callback = callback;
     }
 
-    public Socket findUserSocket(String targetUser) {
-        if (userID_Socket_map.containsKey(targetUser)) {
-            return userID_Socket_map.get(targetUser);
+    public Client findUserClient(String targetUser) {
+        if (stringClientMap.containsKey(targetUser)) {
+            return stringClientMap.get(targetUser);
         }
         return null;
     }
 
-    public void handleClientMessage(String message, Socket socket) {
-        if (message.startsWith("Iam:")) {
-            String subStr = message.substring(4);
-            System.out.println(subStr + " from " + socket.getInetAddress());
+    public void handleClientMessage(String message, Client client) {
+        if (message.startsWith(CONTROL_TOKEN + "Iam:")) {
+            String subStr = message.substring(CONTROL_TOKEN.length() + 4);
+//            System.out.println(subStr + " from " + socket.getInetAddress());
             //存入<userID,socket> map
-            newClient(subStr, socket);
+            newClient(subStr, client);
         } else {
             forwardToTarget(message);
         }
@@ -67,15 +67,15 @@ public class ClientsHandler {
         }
         if (imMessage != null && imMessage.getMsgDestination() != null) {
             String targetUser = imMessage.getMsgDestination();
-            Socket socketTargetUser = findUserSocket(targetUser);
-            if (socketTargetUser != null) {
-                callback.send(socketTargetUser,message);
+            Client client = findUserClient(targetUser);
+            if (client != null) {
+                callback.send(client, message);
             }
         }
     }
 
     public interface Callback {
-        void send(Socket socket, String string);
+        void send(Client client, String string);
     }
 
 }

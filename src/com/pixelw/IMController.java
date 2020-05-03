@@ -1,68 +1,70 @@
 package com.pixelw;
 
-import com.pixelw.net.SocketCore;
-import com.pixelw.net.SocketListener;
-
-import java.net.Socket;
+import com.pixelw.entity.Client;
+import com.pixelw.net.ServerCore;
+import com.pixelw.net.ServerListener;
+import com.pixelw.net.netty.NettyCore;
 
 /**
  * @author Carl Su
  * @date 2020/4/26
  */
-public class IMController implements SocketListener {
+public class IMController implements ServerListener {
 
     private ClientsHandler clientsHandler;
-    private final SocketCore socketCore;
+    public static final int SERVER_PORT = 9832;
+    private final ServerCore serverCore;
 
     public IMController() {
-        socketCore = new SocketCore(this,9832);
-        socketCore.bindPort();
         clientsHandler = new ClientsHandler();
         clientsHandler.setCallback(new ClientsHandler.Callback() {
             @Override
-            public void send(Socket socket, String string) {
-                sendViaSocket(socket, string);
+            public void send(Client client, String string) {
+                IMController.this.send(client, string);
             }
         });
+
+        serverCore = new NettyCore(this, SERVER_PORT);
+        serverCore.run();
     }
 
-    public void sendViaSocket(Socket socket, String msg){
-        socketCore.sendViaSocket(socket, msg);
-    }
-
-    @Override
-    public void onOpen(SocketCore socketCore, Socket socket) {
-        System.out.println(socket.getInetAddress() + " connected");
-    }
-
-    @Override
-    public void onMessage(SocketCore socketCore, Socket socket, String message) {
-        clientsHandler.handleClientMessage(message, socket);
+    public void send(Client client, String msg) {
+        serverCore.sendTextMsg(msg, client);
     }
 
     @Override
-    public void onDisconnecting(SocketCore socketCore, Socket socket) {
-        System.out.println(socket.getInetAddress().toString() + " intended to disconnect");
+    public void onOpen(ServerCore serverCore, Client client) {
+        System.out.println(client.getInetAddress());
     }
 
     @Override
-    public void onDisconnected(SocketCore socketCore, Socket socket) {
-        System.out.println(socket.getInetAddress().toString() + " disconnected");
+    public void onMessage(ServerCore socketCore, Client client, String message) {
+        clientsHandler.handleClientMessage(message, client);
     }
 
     @Override
-    public void onClosed(SocketCore core) {
+    public void onDisconnecting(ServerCore socketCore, Client client) {
+        System.out.println(client.getInetAddress() + " intended to disconnect");
+    }
+
+    @Override
+    public void onDisconnected(ServerCore socketCore, Client client) {
+        System.out.println(client.getInetAddress() + " disconnected");
+    }
+
+    @Override
+    public void onClosed(ServerCore core) {
         System.out.println("server closed");
     }
 
 
     public void finish() {
-        socketCore.closeConnection(clientsHandler.getUserID_Socket_map());
+        serverCore.shutdown(clientsHandler.getStringClientMap());
     }
 
     public void sendTextMsg(String userId, String msg) {
-        Socket socket = clientsHandler.findUserSocket(userId);
-        socketCore.sendViaSocket(socket,msg);
+        Client client = clientsHandler.findUserClient(userId);
+        serverCore.sendTextMsg(msg, client);
 
     }
 }
