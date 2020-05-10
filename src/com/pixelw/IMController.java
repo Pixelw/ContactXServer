@@ -3,7 +3,7 @@ package com.pixelw;
 import com.pixelw.entity.Client;
 import com.pixelw.net.ServerCore;
 import com.pixelw.net.ServerListener;
-import com.pixelw.net.netty.NettyCore;
+import com.pixelw.net.legacy.SocketCore;
 
 /**
  * @author Carl Su
@@ -24,7 +24,7 @@ public class IMController implements ServerListener {
             }
         });
 
-        serverCore = new NettyCore(this, SERVER_PORT);
+        serverCore = new SocketCore(this, SERVER_PORT);
         serverCore.run();
     }
 
@@ -39,6 +39,7 @@ public class IMController implements ServerListener {
 
     @Override
     public void onMessage(ServerCore socketCore, Client client, String message) {
+        System.out.println("receive:" + message);
         clientsHandler.handleClientMessage(message, client);
     }
 
@@ -49,7 +50,7 @@ public class IMController implements ServerListener {
 
     @Override
     public void onDisconnected(ServerCore socketCore, Client client) {
-        System.out.println(client.getInetAddress() + " disconnected");
+        System.out.println(client.getInetAddress() + " disconnected " + clientsHandler.removeClient(client));
     }
 
     @Override
@@ -64,7 +65,7 @@ public class IMController implements ServerListener {
 
     public void sendTextMsg(String userId, String msg) {
         Client client = clientsHandler.findUserClient(userId);
+        System.out.println("send" + msg);
         serverCore.sendTextMsg(msg, client);
-
     }
 }

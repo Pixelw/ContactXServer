@@ -13,7 +13,7 @@ import java.util.Map;
 public class SocketCore extends com.pixelw.net.ServerCore {
 
     private ServerSocket serverSocket;
-
+    private int nullCount = 0;
 
     public SocketCore(ServerListener serverListener, int serverPort) {
         super(serverListener, serverPort);
@@ -122,15 +122,20 @@ public class SocketCore extends com.pixelw.net.ServerCore {
      * @return 是否保持连接
      */
     private boolean receive(String msg, Client client) {
-
-        if (msg != null && msg.equals(CONTROL_TOKEN)) {
-            listener.onDisconnecting(this, client);
-            return false;
+        if (msg == null || msg.length() == 0) {
+            nullCount++;
+            if (nullCount == 10) {
+                System.out.println("10 nulls occurred, cut");
+                return false;
+            }
+        } else {
+            if (msg.equals(CONTROL_TOKEN)) {
+                listener.onDisconnecting(this, client);
+                return false;
+            }
+            listener.onMessage(this, client, msg);
         }
-        listener.onMessage(this, client, msg);
-//        clientsHandler.handleClientMessage(msg, socket);
         return true;
-
     }
 
     private void sendViaSocket(Socket socket, String msg) {

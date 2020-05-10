@@ -16,6 +16,7 @@ public class Client {
     private Socket socket;
     private Channel channel;
     private int type;
+    private String userId;
 
     public Client(Socket socket) {
         this.type = TYPE_LEGACY;
@@ -55,5 +56,13 @@ public class Client {
             default:
                 return null;
         }
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 }
