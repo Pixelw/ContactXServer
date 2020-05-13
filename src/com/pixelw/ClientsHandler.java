@@ -5,7 +5,6 @@ import com.google.gson.reflect.TypeToken;
 import com.pixelw.entity.Client;
 
 import java.lang.reflect.Type;
-import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -34,7 +33,7 @@ public class ClientsHandler {
     }
 
     private void newClient(String userID, Client client) {
-        stringClientMap.put(userID, client);
+        stringClientMap.putIfAbsent(userID, client);
     }
 
     public boolean removeClient(Client client) {
@@ -75,6 +74,7 @@ public class ClientsHandler {
                     returnOnlineUsers(jsonObject.getAsJsonArray("usersCrc32"), client);
                 }
             } catch (Exception e) {
+                System.out.println("error on handling message");
                 e.printStackTrace();
             }
 
@@ -86,7 +86,6 @@ public class ClientsHandler {
         }.getType();
         List<String> crc32s = gson.fromJson(usersCrc32, type);
         List<String> onlineUsersCrc32 = new ArrayList<>();
-        stringClientMap.put("2662605079", new Client(new Socket()));
         for (String crc32 : crc32s) {
             if (stringClientMap.getOrDefault(crc32, null) != null) {
                 onlineUsersCrc32.add(crc32);

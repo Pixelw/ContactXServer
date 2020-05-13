@@ -3,7 +3,7 @@ package com.pixelw;
 import com.pixelw.entity.Client;
 import com.pixelw.net.ServerCore;
 import com.pixelw.net.ServerListener;
-import com.pixelw.net.legacy.SocketCore;
+import com.pixelw.net.netty.NettyCore;
 
 /**
  * @author Carl Su
@@ -11,20 +11,15 @@ import com.pixelw.net.legacy.SocketCore;
  */
 public class IMController implements ServerListener {
 
-    private ClientsHandler clientsHandler;
+    private final ClientsHandler clientsHandler;
     public static final int SERVER_PORT = 9832;
     private final ServerCore serverCore;
 
     public IMController() {
         clientsHandler = new ClientsHandler();
-        clientsHandler.setCallback(new ClientsHandler.Callback() {
-            @Override
-            public void send(Client client, String string) {
-                IMController.this.send(client, string);
-            }
-        });
+        clientsHandler.setCallback(IMController.this::send);
 
-        serverCore = new SocketCore(this, SERVER_PORT);
+        serverCore = new NettyCore(this, SERVER_PORT);
         serverCore.run();
     }
 
@@ -65,6 +60,7 @@ public class IMController implements ServerListener {
 
     public void sendTextMsg(String userId, String msg) {
         Client client = clientsHandler.findUserClient(userId);
+        if (client == null) return;
         System.out.println("send" + msg);
         serverCore.sendTextMsg(msg, client);
     }
